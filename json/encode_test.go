@@ -186,3 +186,30 @@ func TestMarshalerEscaping(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+type MultiTag struct {
+	A string `db:"_a"`
+	B string `api:"test"`
+	C string `db:"-" api:"c"`
+}
+
+func TestMarshalTag(t *testing.T) {
+	multTag := MultiTag{"A", "B", "C"}
+	const wantDb = `{"_a":"A","B":"B"}`
+	bDb, err := MarshalTag(multTag, "db")
+	if err != nil {
+		t.Fatalf("MarshalTag: %v", err)
+	}
+	if got := string(bDb); got != wantDb {
+		t.Errorf("got %q, want %q", got, wantDb)
+	}
+
+	const wantApi = `{"A":"A","test":"B","c":"C"}`
+	bApi, err := MarshalTag(multTag, "api")
+	if err != nil {
+		t.Fatalf("MarshalTag: %v", err)
+	}
+	if got := string(bApi); got != wantApi {
+		t.Errorf("got %q, want %q", got, wantApi)
+	}
+}

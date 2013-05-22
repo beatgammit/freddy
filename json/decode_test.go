@@ -703,3 +703,27 @@ func TestInterfaceSet(t *testing.T) {
 		}
 	}
 }
+
+func TestUnmarshalTag(t *testing.T) {
+	var dbGot MultiTag
+	dbWant := MultiTag{"A", "B", ""}
+	dbBlob := `{"_a":"A","B":"B","C":"C"}`
+	err := UnmarshalTag([]byte(dbBlob), &dbGot, "db")
+	if err != nil {
+		t.Fatalf("UnmarshalTag: %v", err)
+	}
+	if dbGot != dbWant {
+		t.Errorf("got %v, want %v", dbGot, dbWant)
+	}
+
+	var apiGot MultiTag
+	apiWant := MultiTag{"A", "B", "C"}
+	apiBlob := `{"A":"A","test":"B","c":"C"}`
+	err = UnmarshalTag([]byte(apiBlob), &apiGot, "api")
+	if err != nil {
+		t.Fatalf("UnmarshalTag: %v", err)
+	}
+	if apiGot != apiWant {
+		t.Errorf("got %v, want %v", apiGot, apiWant)
+	}
+}

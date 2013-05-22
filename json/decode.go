@@ -52,7 +52,11 @@ import (
 // an UnmarshalTypeError describing the earliest such error.
 //
 func Unmarshal(data []byte, v interface{}) error {
-	d := new(decodeState).init(data)
+	return UnmarshalTag(data, v, defaultTag)
+}
+
+func UnmarshalTag(data []byte, v interface{}, tags ...string) error {
+	d := new(decodeState).init(data, tags...)
 
 	// Quick check for well-formedness.
 	// Avoids filling out half a data structure
@@ -145,6 +149,7 @@ type decodeState struct {
 	nextscan   scanner // for calls to nextValue
 	savedError error
 	tempstr    string // scratch space to avoid some allocations
+	tags       []string
 }
 
 // errPhase is used for errors that should not happen unless
@@ -152,10 +157,11 @@ type decodeState struct {
 // the data slice while the decoder executes.
 var errPhase = errors.New("JSON decoder out of sync - data changing underfoot?")
 
-func (d *decodeState) init(data []byte) *decodeState {
+func (d *decodeState) init(data []byte, tags ...string) *decodeState {
 	d.data = data
 	d.off = 0
 	d.savedError = nil
+	d.tags = tags
 	return d
 }
 
@@ -496,7 +502,15 @@ func (d *decodeState) object(v reflect.Value) {
 			st := sv.Type()
 			for i := 0; i < sv.NumField(); i++ {
 				sf := st.Field(i)
-				tag := sf.Tag.Get("json")
+
+				var tag string
+				for _, tagkey := range d.tags {
+					tag = sf.Tag.Get(tagkey)
+					if tag != "" {
+						break
+					}
+				}
+
 				if tag == "-" {
 					// Pretend this field doesn't exist.
 					continue

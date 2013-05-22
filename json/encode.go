@@ -54,7 +54,7 @@ import (
 // The empty values are false, 0, any
 // nil pointer or interface value, and any array, slice, map, or string of
 // length zero. The object's default key string is the struct field name
-// but can be specified in the struct field's tag value. The "json" key in
+// but can be specified in the struct field's tag value. The defaultTag key in
 // the struct field's tag value is the key name, followed by an optional comma
 // and options. Examples:
 //
@@ -103,7 +103,11 @@ import (
 // an infinite recursion.
 //
 func Marshal(v interface{}) ([]byte, error) {
-	e := &encodeState{}
+	return MarshalTag(v, defaultTag)
+}
+
+func MarshalTag(v interface{}, tags ...string) ([]byte, error) {
+	e := &encodeState{tags: tags}
 	err := e.marshal(v)
 	if err != nil {
 		return nil, err
@@ -199,6 +203,7 @@ var hex = "0123456789abcdef"
 type encodeState struct {
 	bytes.Buffer // accumulated output
 	scratch      [64]byte
+	tags         []string
 }
 
 func (e *encodeState) marshal(v interface{}) (err error) {
@@ -325,7 +330,7 @@ func (e *encodeState) reflectValueQuoted(v reflect.Value, quoted bool) {
 	case reflect.Struct:
 		e.WriteByte('{')
 		first := true
-		for _, ef := range encodeFields(v.Type()) {
+		for _, ef := range encodeFields(v.Type(), e.tags) {
 			fieldValue := v.Field(ef.i)
 			if ef.omitEmpty && isEmptyValue(fieldValue) {
 				continue
@@ -501,24 +506,30 @@ type encodeField struct {
 
 var (
 	typeCacheLock     sync.RWMutex
-	encodeFieldsCache = make(map[reflect.Type][]encodeField)
+	encodeFieldsCache = make(map[reflect.Type]map[string][]encodeField)
 )
 
 // encodeFields returns a slice of encodeField for a given
 // struct type.
-func encodeFields(t reflect.Type) []encodeField {
+func encodeFields(t reflect.Type, tags []string) (fs []encodeField) {
+	tagStr := strings.Join(tags, " ")
+
 	typeCacheLock.RLock()
-	fs, ok := encodeFieldsCache[t]
+	m, ok := encodeFieldsCache[t]
 	typeCacheLock.RUnlock()
 	if ok {
-		return fs
+		if fs, ok = m[tagStr]; ok {
+			return fs
+		}
 	}
 
 	typeCacheLock.Lock()
 	defer typeCacheLock.Unlock()
-	fs, ok = encodeFieldsCache[t]
+	m, ok = encodeFieldsCache[t]
 	if ok {
-		return fs
+		if fs, ok = m[tagStr]; ok {
+			return fs
+		}
 	}
 
 	v := reflect.Zero(t)
@@ -537,7 +548,13 @@ func encodeFields(t reflect.Type) []encodeField {
 		ef.i = i
 		ef.tag = f.Name
 
-		tv := f.Tag.Get("json")
+		var tv string
+		for _, tagkey := range tags {
+			tv = f.Tag.Get(tagkey)
+			if tv != "" {
+				break
+			}
+		}
 		if tv != "" {
 			if tv == "-" {
 				continue
@@ -551,6 +568,9 @@ func encodeFields(t reflect.Type) []encodeField {
 		}
 		fs = append(fs, ef)
 	}
-	encodeFieldsCache[t] = fs
+	if _, ok = encodeFieldsCache[t]; !ok {
+		encodeFieldsCache[t] = make(map[string][]encodeField)
+	}
+	encodeFieldsCache[t][tagStr] = fs
 	return fs
 }
