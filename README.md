@@ -1,4 +1,4 @@
-freddy
+freddy [![Build Status](https://travis-ci.org/beatgammit/freddy.png)](https://travis-ci.org/beatgammit/freddy)
 ======
 
 Freddy extends on Go's `encoding/json` by adding support for multiple tags. I hope to get this merged into the standard library eventually.
